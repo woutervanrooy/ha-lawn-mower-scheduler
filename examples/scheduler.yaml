@@ -1,0 +1,16 @@
+# Alternative to creating the scheduler in the automation UI.
+# Copy to packages/lawn_schedule.yaml and choose your mower and Schedule helper.
+automation:
+  - id: lawn_mower_growth_schedule
+    alias: Lawn mower - Growth-adaptive schedule
+    use_blueprint:
+      path: lawn_mower_scheduler/lawn_mower_schedule.yaml
+      input:
+        mower_entity: lawn_mower.garden
+        schedule_entity: schedule.mowing
+        # job_started_event: event.mower_job_started
+        # job_finished_event: event.mower_job_finished
+        # mowed_area_sensor: sensor.mower_mowed_area
+        # full_mow_area: 90
+        # rain_delay_sensor: binary_sensor.mower_rain_delay
+        # min_hours_between_starts: 4

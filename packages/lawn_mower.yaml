@@ -1,0 +1,89 @@
+# Support entities for one mower. See ../README.md for template blueprint setup.
+# Replace the old lawn-mower package; do not load both packages together.
+
+input_select:
+  lawn_mower_mode:
+    name: "Lawn - Mowing mode"
+    options:
+      - Auto
+      - Always daily
+      - Disabled
+    icon: mdi:robot-mower
+
+input_datetime:
+  lawn_mower_last_started:
+    name: "Lawn - Last started mow"
+    has_date: true
+    has_time: true
+    icon: mdi:calendar-clock
+  lawn_mower_last_completed:
+    name: "Lawn - Last completed mow"
+    has_date: true
+    has_time: true
+    icon: mdi:calendar-check
+
+sensor:
+  - platform: statistics
+    name: Lawn Growth Index 72h
+    unique_id: 60cf8b32-0d87-4ccf-ab01-5ee7d9313b1e
+    entity_id: sensor.lawn_growth_index
+    state_characteristic: mean
+    max_age:
+      hours: 72
+    sampling_size: 100000
+    keep_last_sample: true
+    precision: 1
+
+template:
+  - sensor:
+      - name: Lawn Days Between Mows
+        unique_id: lawn_days_between_mows
+        unit_of_measurement: d
+        state_class: measurement
+        icon: mdi:calendar-arrow-right
+        availability: >-
+          {{ states('input_select.lawn_mower_mode') in ['Auto', 'Always daily', 'Disabled'] }}
+        state: >-
+          {% set mode = states('input_select.lawn_mower_mode') %}
+          {% set index = states('sensor.lawn_growth_index_72h') | float(0) %}
+          {% if mode == 'Disabled' %}
+            0
+          {% elif mode == 'Always daily' %}
+            1
+          {% elif index < 20 %}
+            7
+          {% elif index < 40 %}
+            4
+          {% elif index < 60 %}
+            3
+          {% elif index < 80 %}
+            2
+          {% else %}
+            1
+          {% endif %}
+        attributes:
+          growth_average_available: >-
+            {{ is_number(states('sensor.lawn_growth_index_72h')) }}
+
+  # Uncomment and choose your source entities. Further inputs are optional.
+  # - use_blueprint:
+  #     path: lawn_mower_scheduler/lawn_growth_index.yaml
+  #     input:
+  #       temperature_sensor: sensor.air_temperature
+  #   name: Lawn Growth Index
+  #   unique_id: lawn_growth_index
+  #
+  # - use_blueprint:
+  #     path: lawn_mower_scheduler/lawn_wet.yaml
+  #     input:
+  #       rain_sensor: sensor.rain_last_hour
+  #       humidity_sensor: sensor.relative_humidity
+  #   name: Lawn Wet
+  #   unique_id: lawn_wet
+  #
+  # - use_blueprint:
+  #     path: lawn_mower_scheduler/lawn_frozen.yaml
+  #     input:
+  #       temperature_sensor: sensor.air_temperature
+  #   name: Lawn Frozen
+  #   unique_id: lawn_frozen
