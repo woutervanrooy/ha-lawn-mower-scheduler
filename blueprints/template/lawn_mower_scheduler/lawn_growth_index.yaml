@@ -6,7 +6,7 @@ blueprint:
     When both moisture inputs are configured, the drier factor limits growth.
     Configure this template blueprint in YAML.
   domain: template
-  # source_url: https://github.com/OWNER/REPOSITORY/blob/main/blueprints/template/lawn_mower_scheduler/lawn_growth_index.yaml
+  source_url: https://github.com/woutervanrooy/ha-lawn-mower-scheduler/blob/main/blueprints/template/lawn_mower_scheduler/lawn_growth_index.yaml
   homeassistant:
     min_version: "2024.11.0"
   input:

@@ -6,7 +6,7 @@ blueprint:
     the off delay starts. Between thresholds, retain the previous state.
     Configure this template blueprint in YAML.
   domain: template
-  # source_url: https://github.com/OWNER/REPOSITORY/blob/main/blueprints/template/lawn_mower_scheduler/lawn_frozen.yaml
+  source_url: https://github.com/woutervanrooy/ha-lawn-mower-scheduler/blob/main/blueprints/template/lawn_mower_scheduler/lawn_frozen.yaml
   homeassistant:
     min_version: "2024.11.0"
   input:
