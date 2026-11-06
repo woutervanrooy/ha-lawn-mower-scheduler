@@ -1,7 +1,12 @@
 # Lawn mower scheduler
 
 A portable collection of Home Assistant blueprints for one lawn mower.
-No custom integration or dashboard plugins are required.
+The collection uses built-in Home Assistant components and needs no custom
+dashboard plugins. Your mower integration must provide a compatible
+`lawn_mower` entity.
+
+Source: [woutervanrooy/ha-lawn-mower-scheduler](https://github.com/woutervanrooy/ha-lawn-mower-scheduler).
+Shared under the [MIT license](LICENSE).
 
 - A growth index and its rolling 72-hour average choose the mowing interval.
 - `Auto` never drops below a weekly target, including during dormancy.
@@ -12,7 +17,7 @@ No custom integration or dashboard plugins are required.
 
 Requires **Home Assistant 2024.11.0 or newer** for template blueprints. The
 automation is configured in the UI or YAML; template blueprint inputs are
-configured in YAML. This folder is independent of the previous lawn-mower setup.
+configured in YAML.
 
 ## Files
 
@@ -29,8 +34,27 @@ configured in YAML. This folder is independent of the previous lawn-mower setup.
 
 ## Install
 
-1. Copy the two `lawn_mower_scheduler` blueprint directories to your Home
-   Assistant configuration directory, preserving their domain:
+### Prerequisites
+
+- Home Assistant **2024.11.0 or newer**.
+- A native `lawn_mower` entity supporting `lawn_mower.start_mowing` and reporting
+  `docked`, `mowing` and, where available, `returning`.
+- Numeric sensors for current air temperature in **Celsius**, rainfall in the
+  **last hour in mm** and relative humidity in **percent**. Do not substitute a
+  daily rain total or a rain-rate sensor for the last-hour total.
+- A **Schedule** helper for permitted start times, created in step 4 below.
+
+Values are **not automatically converted**. Optional ground temperature must
+also be in Celsius; bucket values use mm, soil moisture uses percent,
+irradiation uses kWh/m2 and mowed area uses m2. See [Adapting settings](#adapting-settings).
+The default support package is for one mower.
+
+### Installation steps
+
+1. Open the [repository](https://github.com/woutervanrooy/ha-lawn-mower-scheduler),
+   select **Code -> Download ZIP**, and extract it. Copy the two
+   `lawn_mower_scheduler` blueprint directories to your Home Assistant
+   configuration directory, preserving their domain:
 
    ```text
    blueprints/automation/lawn_mower_scheduler/lawn_mower_schedule.yaml
@@ -39,6 +63,10 @@ configured in YAML. This folder is independent of the previous lawn-mower setup.
    blueprints/template/lawn_mower_scheduler/lawn_frozen.yaml
    ```
 
+   If using the [optional scheduler import](#optional-scheduler-import), copy
+   only the template directory and import the scheduler instead of copying the
+   automation directory. Do not install both copies.
+
 2. Copy the [support package](packages/lawn_mower.yaml) to your configuration's
    `packages` directory. Enable packages if they are not already enabled:
 
@@ -46,6 +74,10 @@ configured in YAML. This folder is independent of the previous lawn-mower setup.
    homeassistant:
      packages: !include_dir_named packages
    ```
+
+   Merge this into an existing `homeassistant:` section rather than adding a
+   duplicate section. Only copy the runtime files described here; the repository's
+   tests and development requirements are not needed on your Home Assistant.
 
 3. Copy the [template example](examples/templates.yaml) into that packages
    directory as `lawn_conditions.yaml`. Select your air-temperature, last-hour
@@ -93,6 +125,30 @@ configured in YAML. This folder is independent of the previous lawn-mower setup.
 
 8. Optionally paste the [dashboard card](dashboard_card.yaml) into a manual
    dashboard card.
+
+### Optional scheduler import
+
+For a new installation, you can
+[import the scheduler into Home Assistant](https://my.home-assistant.io/redirect/blueprint_import?blueprint_url=https%3A%2F%2Fgithub.com%2Fwoutervanrooy%2Fha-lawn-mower-scheduler%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Flawn_mower_scheduler%2Flawn_mower_schedule.yaml)
+instead of copying its blueprint file in step 1. This imports **only the
+scheduler blueprint**, not the template blueprints or support package. Continue
+copying the three template files and configuring their YAML instances as above.
+
+GitHub imports normally save the scheduler as
+`woutervanrooy/lawn_mower_schedule.yaml`. Select that imported blueprint when
+creating the automation in step 6; the automation UI handles its path.
+If using the [YAML scheduler example](examples/scheduler.yaml), change only its
+`use_blueprint.path` to:
+
+```yaml
+use_blueprint:
+  path: woutervanrooy/lawn_mower_schedule.yaml
+```
+
+Keep all three template paths under `lawn_mower_scheduler/` unchanged. Create
+one scheduler automation, not separate UI and YAML instances.
+For an existing manual installation, use [re-import/update](#source-and-updates)
+on the existing blueprint instead of importing a second copy.
 
 ## Adapting settings
 
@@ -269,13 +325,52 @@ The existing growth-average and interval dashboard references remain valid.
 The new weather entities are `binary_sensor.lawn_wet` and
 `binary_sensor.lawn_frozen`.
 
-## Publishing later
+## Source and updates
 
-The collection has no vendor-specific entity IDs. Put this folder in its own
-repository, choose a license, and replace/uncomment the `source_url` placeholders
-in each blueprint when a public URL exists. Template and automation blueprints
-can then be distributed with the support package and examples. No integration
-manifest or marketplace publication is included here.
+Each blueprint's `source_url` points to its public file on `main`:
+
+| Blueprint | Source URL |
+| --- | --- |
+| Scheduler | [lawn_mower_schedule.yaml](https://github.com/woutervanrooy/ha-lawn-mower-scheduler/blob/main/blueprints/automation/lawn_mower_scheduler/lawn_mower_schedule.yaml) |
+| Growth | [lawn_growth_index.yaml](https://github.com/woutervanrooy/ha-lawn-mower-scheduler/blob/main/blueprints/template/lawn_mower_scheduler/lawn_growth_index.yaml) |
+| Wet | [lawn_wet.yaml](https://github.com/woutervanrooy/ha-lawn-mower-scheduler/blob/main/blueprints/template/lawn_mower_scheduler/lawn_wet.yaml) |
+| Frozen | [lawn_frozen.yaml](https://github.com/woutervanrooy/ha-lawn-mower-scheduler/blob/main/blueprints/template/lawn_mower_scheduler/lawn_frozen.yaml) |
+
+These addresses provide source tracking and manual re-import, **not automatic
+updates** or release-version pinning. Re-import replaces blueprint definitions;
+it does not install or merge support packages, examples or configured input
+bindings. Changes to a definition, including its defaults, can still affect
+mowing behavior. Review changes on `main` before updating.
+
+### Safe update checklist
+
+1. Wait for the mower to dock. Note your current mode, then select **Disabled**.
+   Disabled does not stop an already-running job.
+2. Back up your Home Assistant configuration, blueprint files, customized inputs
+   and last-started/completed history. Re-import overwrites local blueprint edits.
+3. Review the source changes. For the scheduler, go to **Settings -> Automations
+   & scenes -> Blueprints**, open the existing blueprint's menu and select
+   **Re-import blueprint**. Keep its existing installed path.
+   For template blueprints, download and replace their existing files under
+   `blueprints/template/lawn_mower_scheduler/`, then reload template entities.
+4. Merge any necessary support-package or example changes manually. Do not
+   blindly replace your configured instances; preserve helper IDs, sensor
+   selections, tuning inputs and history. Blueprint re-import does not manage
+   these files or settings.
+5. Run **Check configuration** and reload affected automations/templates or
+   restart Home Assistant after manual replacements.
+6. Verify entity IDs, history and the availability/plausibility of wet/frozen
+   guards, then restore your previous mode. An on guard is valid when the lawn
+   is wet or frozen; do not force it off to resume mowing.
+
+See Home Assistant's [blueprint update instructions](https://www.home-assistant.io/docs/automation/using_blueprints/#re-importing-a-blueprint).
+
+## License and sharing
+
+This collection is published under the [MIT license](LICENSE). Share the
+repository and blueprint source links together with the support-package
+installation instructions. No integration manifest or marketplace package is
+required for this blueprint collection.
 
 The default package supports one mower. Additional mowers need distinct mode,
 timestamp and template entities and corresponding blueprint inputs.
@@ -286,8 +381,9 @@ Tests use the real Home Assistant engine, not a replacement template/automation
 interpreter. Development dependencies currently target Home Assistant 2026.11.0
 and require Python 3.14.2 or newer on Linux (Windows users can use WSL).
 The blueprint and installation schemas were also validated against Home
-Assistant 2024.11.3; the behavioral tests run against the pinned development
-version.
+Assistant 2024.11.0 for both manual-copy and scheduler-import layouts; the
+behavioral tests run against the pinned development version. Publishing checks
+are covered by the focused `tests/test_installation.py` tests.
 
 ```sh
 python3.14 -m venv .venv

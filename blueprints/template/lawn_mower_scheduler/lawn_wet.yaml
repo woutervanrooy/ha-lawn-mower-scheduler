@@ -6,7 +6,7 @@ blueprint:
     ends, a drying delay must pass before the lawn is dry.
     Configure this template blueprint in YAML.
   domain: template
-  # source_url: https://github.com/OWNER/REPOSITORY/blob/main/blueprints/template/lawn_mower_scheduler/lawn_wet.yaml
+  source_url: https://github.com/woutervanrooy/ha-lawn-mower-scheduler/blob/main/blueprints/template/lawn_mower_scheduler/lawn_wet.yaml
   homeassistant:
     min_version: "2024.11.0"
   input:

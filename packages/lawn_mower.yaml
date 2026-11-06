@@ -1,4 +1,5 @@
-# Support entities for one mower. See ../README.md for template blueprint setup.
+# Support entities for one mower.
+# Setup: https://github.com/woutervanrooy/ha-lawn-mower-scheduler#install
 # Replace the old lawn-mower package; do not load both packages together.
 
 input_select:
