@@ -1,0 +1,18 @@
+type: entities
+title: Lawn mowing
+show_header_toggle: false
+entities:
+  - entity: input_select.lawn_mower_mode
+    name: Mowing mode
+  - entity: sensor.lawn_growth_index_72h
+    name: Growth index (72 hours)
+  - entity: sensor.lawn_days_between_mows
+    name: Mowing interval
+  - entity: binary_sensor.lawn_wet
+    name: Wet grass
+  - entity: binary_sensor.lawn_frozen
+    name: Frozen grass
+  - entity: input_datetime.lawn_mower_last_started
+    name: Last started
+  - entity: input_datetime.lawn_mower_last_completed
+    name: Last full mow

@@ -1,0 +1,309 @@
+blueprint:
+  name: Lawn mower - Growth-adaptive schedule
+  description: >-
+    Starts full mows during an allowed Schedule-helper window. Auto follows
+    the 72-hour growth average with a weekly minimum; Always daily uses one
+    calendar day. Both modes respect weather guards. Disabled prevents starts,
+    but full completed jobs are still recorded, including manual jobs.
+  domain: automation
+  # source_url: https://github.com/OWNER/REPOSITORY/blob/main/blueprints/automation/lawn_mower_scheduler/lawn_mower_schedule.yaml
+  homeassistant:
+    min_version: "2024.11.0"
+  input:
+    mower_and_schedule:
+      name: Mower and schedule
+      input:
+        mower_entity:
+          name: Lawn mower
+          selector:
+            entity:
+              domain: lawn_mower
+        schedule_entity:
+          name: Allowed mowing periods
+          description: Create a Schedule helper with at least one permitted period every day.
+          selector:
+            entity:
+              domain: schedule
+        mode_entity:
+          name: Mowing mode
+          default: input_select.lawn_mower_mode
+          selector:
+            entity:
+              domain: input_select
+    weather:
+      name: Weather guards
+      input:
+        wet_sensor:
+          name: Wet lawn
+          default: binary_sensor.lawn_wet
+          selector:
+            entity:
+              domain: binary_sensor
+        frozen_sensor:
+          name: Frozen lawn
+          default: binary_sensor.lawn_frozen
+          selector:
+            entity:
+              domain: binary_sensor
+        rain_delay_sensor:
+          name: Mower rain delay (optional)
+          description: A mower-reported on/off delay. Leave empty if the mower does not expose it.
+          default: []
+          selector:
+            entity:
+              domain: binary_sensor
+    job_tracking:
+      name: Job tracking
+      collapsed: true
+      input:
+        job_started_event:
+          name: Job started event (optional)
+          description: >-
+            An event entity whose state is the job start timestamp. Records
+            manual starts too. Leave empty for docked-to-mowing tracking.
+          default: []
+          selector:
+            entity:
+              domain: event
+        job_finished_event:
+          name: Job finished event (optional)
+          description: >-
+            An event entity whose state is the job completion timestamp and whose
+            event_type attribute identifies the outcome. Leave empty for state-based tracking.
+          default: []
+          selector:
+            entity:
+              domain: event
+        finished_event_types:
+          name: Successful completion types
+          description: Only these event_type values count. Adapt to your mower integration.
+          default:
+            - finished
+            - finished_with_warnings
+          selector:
+            select:
+              multiple: true
+              custom_value: true
+              options:
+                - finished
+                - finished_with_warnings
+        mowed_area_sensor:
+          name: Mowed area (optional)
+          description: >-
+            Area of the completed job in m2. If selected, an unavailable reading
+            or an area below the threshold does not count as a full mow.
+          default: []
+          selector:
+            entity:
+              domain: sensor
+        full_mow_area:
+          name: Full lawn area
+          description: Default 90 m2. Only used when a mowed-area sensor is selected.
+          default: 90
+          selector:
+            number:
+              min: 1
+              max: 100000
+              step: 1
+              mode: box
+              unit_of_measurement: "m\u00b2"
+    timing:
+      name: Start safety
+      collapsed: true
+      input:
+        min_hours_between_starts:
+          name: Minimum hours between starts
+          description: Default 4 hours. Prevents repeated starts after unsuccessful sessions.
+          default: 4
+          selector:
+            number:
+              min: 0.5
+              max: 24
+              step: 0.5
+              mode: box
+              unit_of_measurement: h
+    helpers:
+      name: Support entities
+      collapsed: true
+      input:
+        days_between_sensor:
+          name: Days between mows
+          default: sensor.lawn_days_between_mows
+          selector:
+            entity:
+              domain: sensor
+        last_started_entity:
+          name: Last started mow
+          default: input_datetime.lawn_mower_last_started
+          selector:
+            entity:
+              domain: input_datetime
+        last_completed_entity:
+          name: Last completed mow
+          default: input_datetime.lawn_mower_last_completed
+          selector:
+            entity:
+              domain: input_datetime
+
+variables:
+  v_mower: !input mower_entity
+  v_schedule: !input schedule_entity
+  v_mode: !input mode_entity
+  v_wet: !input wet_sensor
+  v_frozen: !input frozen_sensor
+  v_rain_delay: !input rain_delay_sensor
+  v_days: !input days_between_sensor
+  v_last_started: !input last_started_entity
+  v_last_completed: !input last_completed_entity
+  v_min_hours: !input min_hours_between_starts
+  v_started_event: !input job_started_event
+  v_finished_event: !input job_finished_event
+  v_finished_types: !input finished_event_types
+  v_area: !input mowed_area_sensor
+  v_full_area: !input full_mow_area
+
+trigger:
+  - platform: time
+    at: "00:00:00"
+    id: schedule
+  - platform: state
+    entity_id: !input schedule_entity
+    from: "off"
+    to: "on"
+    id: schedule
+  - platform: state
+    entity_id:
+      - !input wet_sensor
+      - !input frozen_sensor
+    to: "off"
+    id: schedule
+  - platform: state
+    entity_id: !input mode_entity
+    to:
+      - Auto
+      - Always daily
+    id: schedule
+  - platform: state
+    entity_id: !input days_between_sensor
+    to: null
+    id: schedule
+  - platform: state
+    entity_id: !input rain_delay_sensor
+    to: "off"
+    id: schedule
+  - platform: state
+    entity_id: !input job_finished_event
+    not_to:
+      - unknown
+      - unavailable
+    id: completed_event
+  - platform: state
+    entity_id: !input mower_entity
+    from:
+      - mowing
+      - returning
+    to: docked
+    id: completed_state
+  - platform: state
+    entity_id: !input job_started_event
+    not_to:
+      - unknown
+      - unavailable
+    id: started_event
+  - platform: state
+    entity_id: !input mower_entity
+    from: docked
+    to: mowing
+    id: started_state
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id:
+              - started_event
+              - started_state
+        sequence:
+          - condition: template
+            value_template: >-
+              {% if trigger.id == 'started_event' %}
+                {{ trigger.from_state is not none and trigger.to_state is not none
+                   and trigger.from_state.state != trigger.to_state.state
+                   and is_number(as_timestamp(trigger.to_state.state, none)) }}
+              {% else %}
+                {{ not v_started_event }}
+              {% endif %}
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: !input last_started_entity
+            data:
+              timestamp: >-
+                {{ as_timestamp(trigger.to_state.state) if trigger.id == 'started_event'
+                   else as_timestamp(trigger.to_state.last_changed) }}
+      - conditions:
+          - condition: trigger
+            id:
+              - completed_event
+              - completed_state
+        sequence:
+          - condition: template
+            value_template: >-
+              {% if trigger.id == 'completed_event' %}
+                {{ trigger.from_state is not none and trigger.to_state is not none
+                   and trigger.from_state.state != trigger.to_state.state
+                   and is_number(as_timestamp(trigger.to_state.state, none))
+                   and trigger.to_state.attributes.get('event_type') in v_finished_types }}
+              {% else %}
+                {{ not v_finished_event }}
+              {% endif %}
+          - condition: template
+            value_template: >-
+              {% set area = states(v_area) if v_area else none %}
+              {{ not v_area or (is_number(area) and area | float >= v_full_area) }}
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: !input last_completed_entity
+            data:
+              timestamp: >-
+                {{ as_timestamp(trigger.to_state.state) if trigger.id == 'completed_event'
+                   else as_timestamp(trigger.to_state.last_changed) }}
+      - conditions:
+          - condition: trigger
+            id: schedule
+        sequence:
+          - condition: template
+            value_template: "{{ states(v_mode) in ['Auto', 'Always daily'] }}"
+          - condition: state
+            entity_id: !input schedule_entity
+            state: "on"
+          - condition: state
+            entity_id: !input mower_entity
+            state: docked
+          - condition: state
+            entity_id: !input wet_sensor
+            state: "off"
+          - condition: state
+            entity_id: !input frozen_sensor
+            state: "off"
+          - condition: template
+            value_template: "{{ not v_rain_delay or is_state(v_rain_delay, 'off') }}"
+          - condition: template
+            value_template: >-
+              {% set last = state_attr(v_last_started, 'timestamp') %}
+              {{ is_number(last) and now().timestamp() - last | float >= v_min_hours * 3600 }}
+          - condition: template
+            value_template: >-
+              {% set interval = 1 if is_state(v_mode, 'Always daily') else states(v_days) | int(0) %}
+              {% set last = strptime(states(v_last_completed), '%Y-%m-%d %H:%M:%S', none) %}
+              {{ interval > 0 and last is not none and (now().date() - last.date()).days >= interval }}
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: !input last_started_entity
+            data:
+              timestamp: "{{ now().timestamp() }}"
+          - action: lawn_mower.start_mowing
+            target:
+              entity_id: !input mower_entity
+
+mode: queued
+max: 20
