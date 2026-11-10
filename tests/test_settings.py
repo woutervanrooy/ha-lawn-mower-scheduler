@@ -37,15 +37,12 @@ from homeassistant.core import HomeAssistant
     ],
 )
 async def test_growth_settings_change_the_published_index(
-    hass: HomeAssistant, setup_template, settings: dict, readings: dict, expected: str
+    hass: HomeAssistant, setup_conditions, settings: dict, readings: dict, expected: str
 ) -> None:
     hass.states.async_set("sensor.air", "20")
     for entity, reading in readings.items():
         hass.states.async_set(entity, reading)
-    await setup_template(
-        "lawn_growth_index.yaml",
-        "Lawn Growth Index",
-        {"temperature_sensor": "sensor.air", **settings},
+    await setup_conditions({"temperature_sensor": "sensor.air", **settings},
     )
     assert hass.states.get("sensor.lawn_growth_index").state == expected
 
@@ -59,7 +56,7 @@ async def test_growth_settings_change_the_published_index(
 )
 async def test_wetting_thresholds_are_editable(
     hass: HomeAssistant,
-    setup_template,
+    setup_conditions,
     settings: dict,
     rain: str,
     humidity: str,
@@ -67,10 +64,7 @@ async def test_wetting_thresholds_are_editable(
 ) -> None:
     hass.states.async_set("sensor.rain", rain)
     hass.states.async_set("sensor.humidity", humidity)
-    await setup_template(
-        "lawn_wet.yaml",
-        "Lawn Wet",
-        {
+    await setup_conditions({
             "rain_sensor": "sensor.rain",
             "humidity_sensor": "sensor.humidity",
             "drying_hours": 0,
@@ -81,13 +75,10 @@ async def test_wetting_thresholds_are_editable(
 
 
 async def test_air_frost_threshold_is_editable(
-    hass: HomeAssistant, setup_template
+    hass: HomeAssistant, setup_conditions
 ) -> None:
     hass.states.async_set("sensor.air", "10")
-    await setup_template(
-        "lawn_frozen.yaml",
-        "Lawn Frozen",
-        {"temperature_sensor": "sensor.air", "air_frost_temperature": 1, "thaw_hours": 0},
+    await setup_conditions({"temperature_sensor": "sensor.air", "air_frost_temperature": 1, "thaw_hours": 0},
     )
     hass.states.async_set("sensor.air", "2")
     await hass.async_block_till_done()
@@ -95,13 +86,10 @@ async def test_air_frost_threshold_is_editable(
 
 
 async def test_air_thaw_threshold_is_editable(
-    hass: HomeAssistant, setup_template
+    hass: HomeAssistant, setup_conditions
 ) -> None:
     hass.states.async_set("sensor.air", "3")
-    await setup_template(
-        "lawn_frozen.yaml",
-        "Lawn Frozen",
-        {"temperature_sensor": "sensor.air", "air_thaw_temperature": 7, "thaw_hours": 0},
+    await setup_conditions({"temperature_sensor": "sensor.air", "air_thaw_temperature": 7, "thaw_hours": 0},
     )
     hass.states.async_set("sensor.air", "6")
     await hass.async_block_till_done()

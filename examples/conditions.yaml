@@ -1,0 +1,28 @@
+# Alternative to creating the conditions automation in the automation UI.
+# Copy to packages/lawn_conditions.yaml and select your own source sensors.
+automation:
+  - id: lawn_mower_lawn_conditions
+    alias: Lawn mower - Lawn conditions
+    use_blueprint:
+      path: lawn_mower_scheduler/lawn_conditions.yaml
+      input:
+        temperature_sensor: sensor.outdoor_temperature
+        rain_sensor: sensor.rain_last_hour
+        humidity_sensor: sensor.outdoor_humidity
+        # ground_temperature_sensor: sensor.ground_temperature
+        # irradiation_sensor: sensor.irradiation_24h
+        # soil_moisture_sensor: sensor.soil_moisture
+        # bucket_sensor: sensor.soil_water_bucket
+        # bucket_attribute: ""  # Read the state instead of a bucket attribute.
+        # irrigation_entity: switch.lawn_irrigation
+        # mower_rain_sensor: binary_sensor.mower_rain
+        # dry_soil_percent: 15
+        # moist_soil_percent: 30
+        # rain_threshold: 0.5
+        # dew_humidity: 92
+        # drying_hours: 3
+        # air_frost_temperature: 3
+        # ground_frost_temperature: 1
+        # air_thaw_temperature: 5
+        # ground_thaw_temperature: 3
+        # thaw_hours: 2

@@ -1,0 +1,526 @@
+blueprint:
+  name: Lawn mower - Lawn conditions
+  description: >-
+    Calculates the lawn growth index and the wet and frozen lawn guards from
+    your weather sensors, and publishes them to the entities defined by the
+    lawn mower support package. Create exactly one automation from this
+    blueprint. Drying and thaw delays survive restarts.
+  domain: automation
+  source_url: https://github.com/woutervanrooy/ha-lawn-mower-scheduler/blob/main/blueprints/automation/lawn_mower_scheduler/lawn_conditions.yaml
+  homeassistant:
+    min_version: "2024.11.0"
+  input:
+    sensors:
+      name: Sensors
+      input:
+        temperature_sensor:
+          name: Air temperature
+          description: Current air temperature in Celsius. Used for growth and frost.
+          selector:
+            entity:
+              domain: sensor
+              device_class: temperature
+        rain_sensor:
+          name: Rain in the last hour
+          description: Rainfall total in mm over the last hour, not an instantaneous rain rate.
+          selector:
+            entity:
+              domain: sensor
+        humidity_sensor:
+          name: Relative humidity
+          description: Relative humidity in percent, used to estimate dew.
+          selector:
+            entity:
+              domain: sensor
+              device_class: humidity
+    optional_sensors:
+      name: Optional sensors
+      input:
+        ground_temperature_sensor:
+          name: Ground temperature (optional)
+          description: Ground or grass temperature in Celsius. Leave empty for air-only frost detection.
+          default: []
+          selector:
+            entity:
+              domain: sensor
+              device_class: temperature
+        irradiation_sensor:
+          name: Irradiation in the last 24 hours (optional)
+          description: >-
+            Daily light exposure in kWh/m2. Leave empty to ignore light;
+            an unavailable reading also contributes a neutral light factor.
+          default: []
+          selector:
+            entity:
+              domain: sensor
+        soil_moisture_sensor:
+          name: Soil moisture percent (optional)
+          description: Leave empty to ignore this input. Calibrate dry/moist percentages below.
+          default: []
+          selector:
+            entity:
+              domain: sensor
+        bucket_sensor:
+          name: Soil water bucket (optional)
+          description: >-
+            Bucket in mm: negative values indicate a deficit; zero or positive
+            values indicate sufficient water. Supports Smart Irrigation.
+          default: []
+          selector:
+            entity:
+              domain: sensor
+        bucket_attribute:
+          name: Bucket attribute
+          description: Default bucket for Smart Irrigation. Clear to read the sensor state.
+          default: bucket
+          selector:
+            text:
+        irrigation_entity:
+          name: Irrigation activity (optional)
+          description: An on/off activity entity or an open/closed irrigation valve.
+          default: []
+          selector:
+            entity:
+              domain:
+                - switch
+                - input_boolean
+                - binary_sensor
+                - valve
+        mower_rain_sensor:
+          name: Mower rain sensor (optional)
+          description: An on/off rain sensor reported by the mower. Leave empty to ignore.
+          default: []
+          selector:
+            entity:
+              domain: binary_sensor
+    model:
+      name: Growth model
+      collapsed: true
+      input:
+        optimum_temperature:
+          name: Optimum temperature
+          description: Default 20 Celsius. Moves the peak of the growth curve.
+          default: 20
+          selector:
+            number:
+              min: 5
+              max: 35
+              step: 0.5
+              mode: box
+              unit_of_measurement: "\u00b0C"
+        temperature_width:
+          name: Temperature curve width
+          description: Default 5.5. Higher values allow more growth away from the optimum.
+          default: 5.5
+          selector:
+            number:
+              min: 0.5
+              max: 20
+              step: 0.1
+              mode: box
+              unit_of_measurement: "\u00b0C"
+        light_saturation:
+          name: Light saturation
+          description: Default 4 kWh/m2. Higher values need more sunlight for full growth.
+          default: 4
+          selector:
+            number:
+              min: 0.1
+              max: 20
+              step: 0.1
+              mode: box
+              unit_of_measurement: "kWh/m\u00b2"
+        dry_soil_percent:
+          name: Dry soil
+          description: Default 15 percent. At or below this reading, use the minimum moisture factor.
+          default: 15
+          selector:
+            number:
+              min: 0
+              max: 99
+              step: 0.5
+              mode: box
+              unit_of_measurement: "%"
+        moist_soil_percent:
+          name: Moist soil
+          description: Default 30 percent. At or above this reading, moisture does not limit growth.
+          default: 30
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 0.5
+              mode: box
+              unit_of_measurement: "%"
+        drought_deficit:
+          name: Drought deficit scale
+          description: Default 20 mm. Larger values make bucket deficits limit growth less strongly.
+          default: 20
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: mm
+        minimum_moisture_factor:
+          name: Minimum moisture factor
+          description: Default 0.3. The model retains this fraction of growth in very dry soil.
+          default: 0.3
+          selector:
+            number:
+              min: 0
+              max: 1
+              step: 0.05
+              mode: box
+    drying:
+      name: Wet grass and drying
+      collapsed: true
+      input:
+        rain_threshold:
+          name: Rain threshold
+          description: Default 0.5 mm. Lower values also count lighter rain as wetting.
+          default: 0.5
+          selector:
+            number:
+              min: 0.1
+              max: 20
+              step: 0.1
+              mode: box
+              unit_of_measurement: mm
+        dew_humidity:
+          name: Dew humidity threshold
+          description: Default 92 percent. Lower values treat more humid weather as wet grass.
+          default: 92
+          selector:
+            number:
+              min: 50
+              max: 100
+              step: 1
+              mode: box
+              unit_of_measurement: "%"
+        drying_hours:
+          name: Drying time
+          description: Default 3 hours after all wetting stops. Higher values wait longer.
+          default: 3
+          selector:
+            number:
+              min: 0
+              max: 24
+              step: 0.5
+              mode: box
+              unit_of_measurement: h
+    frost:
+      name: Frost and thaw
+      collapsed: true
+      input:
+        air_frost_temperature:
+          name: Air frost temperature
+          description: Default 3 Celsius. At or below this, grass may be frozen.
+          default: 3
+          selector:
+            number:
+              min: -15
+              max: 15
+              step: 0.5
+              mode: box
+              unit_of_measurement: "\u00b0C"
+        ground_frost_temperature:
+          name: Ground frost temperature
+          description: Default 1 Celsius. At or below this, grass may be frozen.
+          default: 1
+          selector:
+            number:
+              min: -15
+              max: 15
+              step: 0.5
+              mode: box
+              unit_of_measurement: "\u00b0C"
+        air_thaw_temperature:
+          name: Air thaw temperature
+          description: Default 5 Celsius. Must exceed the air frost threshold.
+          default: 5
+          selector:
+            number:
+              min: -10
+              max: 25
+              step: 0.5
+              mode: box
+              unit_of_measurement: "\u00b0C"
+        ground_thaw_temperature:
+          name: Ground thaw temperature
+          description: Default 3 Celsius. Must exceed the ground frost threshold.
+          default: 3
+          selector:
+            number:
+              min: -10
+              max: 25
+              step: 0.5
+              mode: box
+              unit_of_measurement: "\u00b0C"
+        thaw_hours:
+          name: Thaw time
+          description: Default 2 hours after all configured sources reach their thaw thresholds.
+          default: 2
+          selector:
+            number:
+              min: 0
+              max: 24
+              step: 0.5
+              mode: box
+              unit_of_measurement: h
+    support:
+      name: Support entities
+      description: Published by the support package. Only change these if you renamed them.
+      collapsed: true
+      input:
+        growth_entity:
+          name: Growth index
+          default: sensor.lawn_growth_index
+          selector:
+            entity:
+              domain: sensor
+        wet_entity:
+          name: Wet lawn
+          default: binary_sensor.lawn_wet
+          selector:
+            entity:
+              domain: binary_sensor
+        frozen_entity:
+          name: Frozen lawn
+          default: binary_sensor.lawn_frozen
+          selector:
+            entity:
+              domain: binary_sensor
+
+trigger_variables:
+  t_wet: !input wet_entity
+  t_frozen: !input frozen_entity
+
+trigger:
+  - platform: homeassistant
+    event: start
+  - platform: event
+    event_type: automation_reloaded
+  - platform: state
+    entity_id:
+      - !input temperature_sensor
+      - !input rain_sensor
+      - !input humidity_sensor
+  - platform: state
+    entity_id: !input ground_temperature_sensor
+  - platform: state
+    entity_id: !input irradiation_sensor
+  - platform: state
+    entity_id: !input soil_moisture_sensor
+  - platform: state
+    entity_id: !input bucket_sensor
+  - platform: state
+    entity_id: !input irrigation_entity
+  - platform: state
+    entity_id: !input mower_rain_sensor
+  # Pending drying/thaw deadlines are stored on the published entities.
+  - platform: template
+    value_template: >-
+      {% set at = state_attr(t_wet, 'dry_at') %}
+      {{ at is string and as_datetime(at) is not none and now() >= as_datetime(at) }}
+  - platform: template
+    value_template: >-
+      {% set at = state_attr(t_frozen, 'thaw_at') %}
+      {{ at is string and as_datetime(at) is not none and now() >= as_datetime(at) }}
+
+variables:
+  temperature_sensor: !input temperature_sensor
+  rain_sensor: !input rain_sensor
+  humidity_sensor: !input humidity_sensor
+  ground_temperature_sensor: !input ground_temperature_sensor
+  irradiation_sensor: !input irradiation_sensor
+  soil_moisture_sensor: !input soil_moisture_sensor
+  bucket_sensor: !input bucket_sensor
+  bucket_attribute: !input bucket_attribute
+  irrigation_entity: !input irrigation_entity
+  mower_rain_sensor: !input mower_rain_sensor
+  optimum_temperature: !input optimum_temperature
+  temperature_width: !input temperature_width
+  light_saturation: !input light_saturation
+  dry_soil_percent: !input dry_soil_percent
+  moist_soil_percent: !input moist_soil_percent
+  drought_deficit: !input drought_deficit
+  minimum_moisture_factor: !input minimum_moisture_factor
+  rain_threshold: !input rain_threshold
+  dew_humidity: !input dew_humidity
+  drying_hours: !input drying_hours
+  air_frost_temperature: !input air_frost_temperature
+  ground_frost_temperature: !input ground_frost_temperature
+  air_thaw_temperature: !input air_thaw_temperature
+  ground_thaw_temperature: !input ground_thaw_temperature
+  thaw_hours: !input thaw_hours
+  growth_entity: !input growth_entity
+  wet_entity: !input wet_entity
+  frozen_entity: !input frozen_entity
+
+  # Growth index
+  growth_available: "{{ is_number(states(temperature_sensor)) }}"
+  growth_error: >-
+    {%- if temperature_width <= 0 -%}
+      Temperature curve width must be positive.
+    {%- elif light_saturation <= 0 -%}
+      Light saturation must be positive.
+    {%- elif drought_deficit <= 0 -%}
+      Drought deficit scale must be positive.
+    {%- elif dry_soil_percent >= moist_soil_percent -%}
+      Dry soil percentage must be below moist soil percentage.
+    {%- elif not 0 <= minimum_moisture_factor <= 1 -%}
+      Minimum moisture factor must be between 0 and 1.
+    {%- endif -%}
+  growth_index: >-
+    {%- if growth_available and not growth_error -%}
+      {%- set temperature = states(temperature_sensor) | float(0) -%}
+      {%- set temperature_factor = e ** (-0.5 * ((temperature - optimum_temperature) / temperature_width) ** 2) -%}
+      {%- set irradiation = states(irradiation_sensor) if irradiation_sensor else none -%}
+      {%- set light_factor = [[irradiation | float / light_saturation, 0] | max, 1] | min if is_number(irradiation) else 1 -%}
+      {%- set soil = states(soil_moisture_sensor) if soil_moisture_sensor else none -%}
+      {%- if is_number(soil) -%}
+        {%- set fraction = [[(soil | float - dry_soil_percent) / (moist_soil_percent - dry_soil_percent), 0] | max, 1] | min -%}
+        {%- set soil_factor = minimum_moisture_factor + fraction * (1 - minimum_moisture_factor) -%}
+      {%- else -%}
+        {%- set soil_factor = 1 -%}
+      {%- endif -%}
+      {%- if bucket_sensor -%}
+        {%- set bucket = state_attr(bucket_sensor, bucket_attribute) if bucket_attribute else states(bucket_sensor) -%}
+      {%- else -%}
+        {%- set bucket = none -%}
+      {%- endif -%}
+      {%- set bucket_factor = [[1 + ([bucket | float, 0] | min) / drought_deficit, minimum_moisture_factor] | max, 1] | min if is_number(bucket) else 1 -%}
+      {{ (temperature_factor * light_factor * ([soil_factor, bucket_factor] | min) * 100) | round(1) }}
+    {%- else -%}
+      {{ none }}
+    {%- endif -%}
+  growth_changed: >-
+    {{ states(growth_entity) != ('unavailable' if growth_index is none else growth_index | string) }}
+
+  # Wet lawn: wetting sources, then a drying delay once every source clears.
+  wet_available: >-
+    {{ true if is_number(states(rain_sensor)) and is_number(states(humidity_sensor))
+       and (not irrigation_entity or states(irrigation_entity) in ['on', 'off', 'open', 'closed', 'opening', 'closing'])
+       and (not mower_rain_sensor or states(mower_rain_sensor) in ['on', 'off']) else false }}
+  wetting: >-
+    {{ true if wet_available and (
+         states(rain_sensor) | float(0) >= rain_threshold
+         or states(humidity_sensor) | float(0) >= dew_humidity
+         or (irrigation_entity and states(irrigation_entity) in ['on', 'open', 'opening', 'closing'])
+         or (mower_rain_sensor and is_state(mower_rain_sensor, 'on'))) else false }}
+  dry_at: >-
+    {%- set previous = states(wet_entity) -%}
+    {%- set remembered = state_attr(wet_entity, 'wetting') -%}
+    {%- set was_wetting = remembered if remembered is boolean else previous != 'off' -%}
+    {%- set pending = state_attr(wet_entity, 'dry_at') if previous == 'on' else none -%}
+    {%- if not wet_available or wetting -%}
+      {%- set at = none -%}
+    {%- elif was_wetting -%}
+      {%- set at = (now() + timedelta(hours=drying_hours)).isoformat() -%}
+    {%- else -%}
+      {%- set at = pending if pending is string else none -%}
+    {%- endif -%}
+    {{ at if at is not none and as_datetime(at) is not none and as_datetime(at) > now() else none }}
+  wet: "{{ true if wetting or dry_at is not none else false }}"
+  wet_changed: >-
+    {%- set expected = ('on' if wet else 'off') if wet_available else 'unavailable' -%}
+    {{ states(wet_entity) != expected
+       or (wet_available and (state_attr(wet_entity, 'wetting') != wetting
+                              or state_attr(wet_entity, 'dry_at') != dry_at)) }}
+
+  # Frozen lawn: frost/thaw hysteresis, then a thaw delay.
+  frozen_available: >-
+    {{ true if is_number(states(temperature_sensor))
+       and (not ground_temperature_sensor or is_number(states(ground_temperature_sensor))) else false }}
+  frozen_error: >-
+    {%- if air_thaw_temperature <= air_frost_temperature -%}
+      Air thaw temperature must exceed air frost temperature.
+    {%- elif ground_temperature_sensor and ground_thaw_temperature <= ground_frost_temperature -%}
+      Ground thaw temperature must exceed ground frost temperature.
+    {%- endif -%}
+  freezing: >-
+    {%- set air = states(temperature_sensor) | float(0) -%}
+    {%- set ground = states(ground_temperature_sensor) | float(0) if ground_temperature_sensor else none -%}
+    {%- set cold = air <= air_frost_temperature or (ground is not none and ground <= ground_frost_temperature) -%}
+    {%- set thawed = air >= air_thaw_temperature and (ground is none or ground >= ground_thaw_temperature) -%}
+    {{ true if frozen_available and (frozen_error or cold
+         or (not thawed and states(frozen_entity) != 'off')) else false }}
+  thaw_at: >-
+    {%- set previous = states(frozen_entity) -%}
+    {%- set remembered = state_attr(frozen_entity, 'freezing') -%}
+    {%- set was_freezing = remembered if remembered is boolean else previous != 'off' -%}
+    {%- set pending = state_attr(frozen_entity, 'thaw_at') if previous == 'on' else none -%}
+    {%- if not frozen_available or freezing -%}
+      {%- set at = none -%}
+    {%- elif was_freezing -%}
+      {%- set at = (now() + timedelta(hours=thaw_hours)).isoformat() -%}
+    {%- else -%}
+      {%- set at = pending if pending is string else none -%}
+    {%- endif -%}
+    {{ at if at is not none and as_datetime(at) is not none and as_datetime(at) > now() else none }}
+  frozen: "{{ true if freezing or thaw_at is not none else false }}"
+  frozen_changed: >-
+    {%- set expected = ('on' if frozen else 'off') if frozen_available else 'unavailable' -%}
+    {{ states(frozen_entity) != expected
+       or (frozen_available and (state_attr(frozen_entity, 'freezing') != freezing
+                                 or state_attr(frozen_entity, 'thaw_at') != thaw_at
+                                 or (state_attr(frozen_entity, 'configuration_error') or '') != frozen_error)) }}
+
+action:
+  # Only publish changes: repeated identical values would add duplicate
+  # samples to the 72-hour statistics average.
+  - if: "{{ growth_changed }}"
+    then:
+      - event: lawn_mower_scheduler_growth
+        event_data:
+          available: "{{ growth_index is not none }}"
+          index: "{{ growth_index }}"
+  - if: "{{ wet_changed }}"
+    then:
+      - event: lawn_mower_scheduler_wet
+        event_data:
+          available: "{{ wet_available }}"
+          wet: "{{ wet }}"
+          wetting: "{{ wetting }}"
+          dry_at: "{{ dry_at }}"
+  - if: "{{ frozen_changed }}"
+    then:
+      - event: lawn_mower_scheduler_frozen
+        event_data:
+          available: "{{ frozen_available }}"
+          frozen: "{{ frozen }}"
+          freezing: "{{ freezing }}"
+          thaw_at: "{{ thaw_at }}"
+          configuration_error: "{{ frozen_error }}"
+  # Report invalid settings when the affected entity changes. Notifications
+  # run last so that a notification failure cannot block the guards.
+  - if: "{{ growth_changed or frozen_changed }}"
+    then:
+      - repeat:
+          for_each:
+            - id: lawn_mower_scheduler_growth_settings
+              changed: "{{ growth_changed }}"
+              error: "{{ growth_error }}"
+            - id: lawn_mower_scheduler_frost_settings
+              changed: "{{ frozen_changed }}"
+              error: "{{ frozen_error }}"
+          sequence:
+            - if: "{{ repeat.item.changed and repeat.item.error != '' }}"
+              then:
+                - action: persistent_notification.create
+                  data:
+                    notification_id: "{{ repeat.item.id }}"
+                    title: Lawn mower conditions settings
+                    message: "{{ repeat.item.error }}"
+              else:
+                - if: "{{ repeat.item.changed }}"
+                  then:
+                    - action: persistent_notification.dismiss
+                      data:
+                        notification_id: "{{ repeat.item.id }}"
+
+mode: queued
+max: 20
+max_exceeded: silent

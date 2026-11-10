@@ -64,4 +64,3 @@ async def test_growth_average_keeps_more_than_twenty_samples_over_72_hours(
     async_fire_time_changed(hass, datetime.now(UTC))
     await hass.async_block_till_done()
     assert hass.states.get("sensor.lawn_growth_index_72h").state == "11.5"
-    await hass.data["sensor"].async_remove_entity("sensor.lawn_growth_index_72h")
