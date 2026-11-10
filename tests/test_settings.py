@@ -51,7 +51,7 @@ async def test_growth_settings_change_the_published_index(
     ("settings", "rain", "humidity", "expected"),
     [
         ({"rain_threshold": 1}, "0.5", "50", "off"),
-        ({"dew_humidity": 90}, "0", "91", "on"),
+        ({"dew_point_margin": 2}, "0", "90", "on"),
     ],
 )
 async def test_wetting_thresholds_are_editable(
@@ -62,6 +62,7 @@ async def test_wetting_thresholds_are_editable(
     humidity: str,
     expected: str,
 ) -> None:
+    hass.states.async_set("sensor.air_temperature", "20")
     hass.states.async_set("sensor.rain", rain)
     hass.states.async_set("sensor.humidity", humidity)
     await setup_conditions({

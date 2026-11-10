@@ -226,20 +226,28 @@ Irradiation is optional and is **not used to determine drying**.
 | --- | --- |
 | Rain in the last hour | Required sensor, in mm |
 | Relative humidity | Required sensor, in percent |
+| Air temperature | Required sensor, in Celsius |
+| Ground temperature | Optional grass-level sensor, in Celsius |
 | Irrigation activity | Optional on/off entity or open/closed valve |
 | Mower rain sensor | Optional on/off binary sensor |
 | Rain threshold | 0.5 mm, inclusive |
-| Dew humidity threshold | 92%, inclusive |
+| Dew point margin | 1 Celsius above the calculated dew point |
 | Drying time | 3 hours after all wetting conditions clear |
 
-Any selected wetting source turns the sensor on. New rain, irrigation or high
-humidity cancels the drying delay; the full delay begins again when every source
-clears. Opening/closing an irrigation valve also counts as activity.
+The dew point is calculated from air temperature and relative humidity using
+the Magnus formula. When configured, the ground temperature sensor is used as
+the grass-surface temperature; otherwise air temperature is used. Dew counts
+when the selected temperature is within the configured margin above the dew
+point. A humidity reading of 0% or less does not produce a dew point. Rain,
+irrigation activity or the mower rain sensor also independently marks the lawn
+wet. Opening/closing an irrigation valve counts as activity.
 
-Humidity is a deliberately simple dew estimate; shaded grass can dry more
-slowly. Increase drying time or lower the humidity threshold for a more cautious
-setup. Missing configured weather/activity readings make the guard unavailable,
-which does not permit mowing.
+New rain, dew, irrigation or mower rain cancels the drying delay; the full delay
+begins again when every wetting condition clears. Increase the dew point margin
+or drying time for a more cautious setup. Missing configured weather/activity
+readings, including a selected but unavailable ground temperature sensor, make
+the guard unavailable, which does not permit mowing. This is an estimate:
+shaded grass may remain wet after its surface warms above the dew point.
 
 ### Frozen lawn
 
@@ -348,6 +356,8 @@ updates** or release-version pinning. Re-import replaces blueprint definitions
 and keeps your configured automation inputs; it does not update the support
 package or examples. Changes to a definition, including its defaults, can
 still affect mowing behavior. Review changes on `main` before updating.
+After re-importing the conditions blueprint, the old `dew_humidity` input is
+ignored; configure the new `dew_point_margin` input in the automation instead.
 
 ### Safe update checklist
 

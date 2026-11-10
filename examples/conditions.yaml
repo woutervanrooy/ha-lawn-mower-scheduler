@@ -19,7 +19,7 @@ automation:
         # dry_soil_percent: 15
         # moist_soil_percent: 30
         # rain_threshold: 0.5
-        # dew_humidity: 92
+        # dew_point_margin: 1
         # drying_hours: 3
         # air_frost_temperature: 3
         # ground_frost_temperature: 1

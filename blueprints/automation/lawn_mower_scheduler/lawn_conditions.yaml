@@ -15,7 +15,7 @@ blueprint:
       input:
         temperature_sensor:
           name: Air temperature
-          description: Current air temperature in Celsius. Used for growth and frost.
+          description: Current air temperature in Celsius. Used for growth, dew point and frost calculations.
           selector:
             entity:
               domain: sensor
@@ -28,7 +28,7 @@ blueprint:
               domain: sensor
         humidity_sensor:
           name: Relative humidity
-          description: Relative humidity in percent, used to estimate dew.
+          description: Relative humidity in percent, used with air temperature to calculate dew point.
           selector:
             entity:
               domain: sensor
@@ -38,7 +38,7 @@ blueprint:
       input:
         ground_temperature_sensor:
           name: Ground temperature (optional)
-          description: Ground or grass temperature in Celsius. Leave empty for air-only frost detection.
+          description: Grass-level temperature in Celsius. Used for frost and dew detection; leave empty to use air temperature.
           default: []
           selector:
             entity:
@@ -188,17 +188,19 @@ blueprint:
               step: 0.1
               mode: box
               unit_of_measurement: mm
-        dew_humidity:
-          name: Dew humidity threshold
-          description: Default 92 percent. Lower values treat more humid weather as wet grass.
-          default: 92
+        dew_point_margin:
+          name: Dew point margin
+          description: >-
+            Default 1 Celsius. Grass or air temperature within this margin
+            above the dew point counts as dew; higher values are more cautious.
+          default: 1
           selector:
             number:
-              min: 50
-              max: 100
-              step: 1
+              min: 0
+              max: 10
+              step: 0.1
               mode: box
-              unit_of_measurement: "%"
+              unit_of_measurement: "°C"
         drying_hours:
           name: Drying time
           description: Default 3 hours after all wetting stops. Higher values wait longer.
@@ -348,7 +350,7 @@ variables:
   drought_deficit: !input drought_deficit
   minimum_moisture_factor: !input minimum_moisture_factor
   rain_threshold: !input rain_threshold
-  dew_humidity: !input dew_humidity
+  dew_point_margin: !input dew_point_margin
   drying_hours: !input drying_hours
   air_frost_temperature: !input air_frost_temperature
   ground_frost_temperature: !input ground_frost_temperature
@@ -400,14 +402,29 @@ variables:
     {{ states(growth_entity) != ('unavailable' if growth_index is none else growth_index | string) }}
 
   # Wet lawn: wetting sources, then a drying delay once every source clears.
+  dew_point: >-
+    {%- set humidity = states(humidity_sensor) | float(0) -%}
+    {%- set air = states(temperature_sensor) | float(0) -%}
+    {%- if humidity > 0 -%}
+      {%- set gamma = log(humidity / 100) + 17.625 * air / (243.04 + air) -%}
+      {{ 243.04 * gamma / (17.625 - gamma) }}
+    {%- else -%}
+      {{ none }}
+    {%- endif -%}
+  dew_temperature: >-
+    {{ states(ground_temperature_sensor) if ground_temperature_sensor
+       else states(temperature_sensor) }}
   wet_available: >-
     {{ true if is_number(states(rain_sensor)) and is_number(states(humidity_sensor))
+       and is_number(states(temperature_sensor))
+       and (not ground_temperature_sensor or is_number(states(ground_temperature_sensor)))
        and (not irrigation_entity or states(irrigation_entity) in ['on', 'off', 'open', 'closed', 'opening', 'closing'])
        and (not mower_rain_sensor or states(mower_rain_sensor) in ['on', 'off']) else false }}
   wetting: >-
     {{ true if wet_available and (
          states(rain_sensor) | float(0) >= rain_threshold
-         or states(humidity_sensor) | float(0) >= dew_humidity
+         or (dew_point is not none and is_number(dew_temperature)
+             and dew_temperature | float - dew_point | float <= dew_point_margin)
          or (irrigation_entity and states(irrigation_entity) in ['on', 'open', 'opening', 'closing'])
          or (mower_rain_sensor and is_state(mower_rain_sensor, 'on'))) else false }}
   dry_at: >-
