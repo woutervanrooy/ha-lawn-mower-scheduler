@@ -1,4 +1,5 @@
-# Support entities for one mower.
+# Support entities for one mower. Contains no personal settings: select your
+# sensors and tune behavior in the two automation blueprints.
 # Setup: https://github.com/woutervanrooy/ha-lawn-mower-scheduler#install
 # Replace the old lawn-mower package; do not load both packages together.
 
@@ -66,25 +67,46 @@ template:
           growth_average_available: >-
             {{ is_number(states('sensor.lawn_growth_index_72h')) }}
 
-  # Uncomment and choose your source entities. Further inputs are optional.
-  # - use_blueprint:
-  #     path: lawn_mower_scheduler/lawn_growth_index.yaml
-  #     input:
-  #       temperature_sensor: sensor.air_temperature
-  #   name: Lawn Growth Index
-  #   unique_id: lawn_growth_index
-  #
-  # - use_blueprint:
-  #     path: lawn_mower_scheduler/lawn_wet.yaml
-  #     input:
-  #       rain_sensor: sensor.rain_last_hour
-  #       humidity_sensor: sensor.relative_humidity
-  #   name: Lawn Wet
-  #   unique_id: lawn_wet
-  #
-  # - use_blueprint:
-  #     path: lawn_mower_scheduler/lawn_frozen.yaml
-  #     input:
-  #       temperature_sensor: sensor.air_temperature
-  #   name: Lawn Frozen
-  #   unique_id: lawn_frozen
+  # Lawn conditions are calculated by the "Lawn conditions" automation
+  # blueprint, which holds all sensor selections and settings. These entities
+  # only store the published results and restore them after a restart.
+  - trigger:
+      - platform: event
+        event_type: lawn_mower_scheduler_growth
+    sensor:
+      - name: Lawn Growth Index
+        unique_id: lawn_growth_index
+        unit_of_measurement: "%"
+        state_class: measurement
+        icon: mdi:sprout
+        availability: "{{ trigger.event.data.get('available', false) }}"
+        state: "{{ trigger.event.data.get('index') }}"
+
+  - trigger:
+      - platform: event
+        event_type: lawn_mower_scheduler_wet
+    binary_sensor:
+      - name: Lawn Wet
+        unique_id: lawn_wet
+        device_class: moisture
+        icon: mdi:weather-pouring
+        availability: "{{ trigger.event.data.get('available', false) }}"
+        state: "{{ trigger.event.data.get('wet', true) }}"
+        attributes:
+          wetting: "{{ trigger.event.data.get('wetting') }}"
+          dry_at: "{{ trigger.event.data.get('dry_at') }}"
+
+  - trigger:
+      - platform: event
+        event_type: lawn_mower_scheduler_frozen
+    binary_sensor:
+      - name: Lawn Frozen
+        unique_id: lawn_frozen
+        device_class: cold
+        icon: mdi:snowflake
+        availability: "{{ trigger.event.data.get('available', false) }}"
+        state: "{{ trigger.event.data.get('frozen', true) }}"
+        attributes:
+          freezing: "{{ trigger.event.data.get('freezing') }}"
+          thaw_at: "{{ trigger.event.data.get('thaw_at') }}"
+          configuration_error: "{{ trigger.event.data.get('configuration_error', '') }}"

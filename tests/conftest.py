@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from pathlib import Path
 import shutil
@@ -13,11 +14,31 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture(autouse=True)
+def settle_event_triggers(hass: HomeAssistant) -> None:
+    # Event triggers dispatch through loop.call_soon, which async_block_till_done
+    # does not track once the publishing automation task has finished.
+    block_till_done = hass.async_block_till_done
+
+    async def settle(*args, **kwargs) -> None:
+        for _ in range(3):
+            await block_till_done(*args, **kwargs)
+            await asyncio.sleep(0)
+        await block_till_done(*args, **kwargs)
+
+    hass.async_block_till_done = settle
+
+
+@pytest.fixture(autouse=True)
 async def remove_automations(hass: HomeAssistant) -> AsyncGenerator[None]:
     yield
     if component := hass.data.get("automation"):
         for entity in list(component.entities):
             await component.async_remove_entity(entity.entity_id)
+    # The statistics sensor schedules purge timers that outlive the test.
+    if (sensors := hass.data.get("sensor")) and sensors.get_entity(
+        "sensor.lawn_growth_index_72h"
+    ):
+        await sensors.async_remove_entity("sensor.lawn_growth_index_72h")
 
 
 @pytest.fixture
@@ -30,28 +51,37 @@ def hass_config_dir(hass_tmp_config_dir: str) -> str:
 
 
 @pytest.fixture
-def setup_template(
-    hass: HomeAssistant,
-) -> Callable[[str, str, dict[str, object]], Awaitable[None]]:
-    async def setup(
-        filename: str, name: str, inputs: dict[str, object]
-    ) -> None:
+def setup_conditions(
+    hass: HomeAssistant, setup_package
+) -> Callable[[dict[str, object]], Awaitable[None]]:
+    async def setup(inputs: dict[str, object]) -> None:
+        await setup_package()
+        if not hass.services.has_service("persistent_notification", "create"):
+            assert await async_setup_component(hass, "persistent_notification", {})
         assert await async_setup_component(
             hass,
-            "template",
+            "automation",
             {
-                "template": [
+                "automation": [
                     {
-                        "name": name,
-                        "unique_id": name.lower().replace(" ", "_"),
+                        "id": "lawn_conditions_test",
+                        "alias": "Lawn conditions test",
                         "use_blueprint": {
-                            "path": f"lawn_mower_scheduler/{filename}",
-                            "input": inputs,
+                            "path": "lawn_mower_scheduler/lawn_conditions.yaml",
+                            "input": {
+                                "temperature_sensor": "sensor.air_temperature",
+                                "rain_sensor": "sensor.rain_last_hour",
+                                "humidity_sensor": "sensor.humidity",
+                                **inputs,
+                            },
                         },
                     }
                 ]
             },
         )
+        await hass.async_block_till_done()
+        # Saving an automation in the UI reloads automations.
+        hass.bus.async_fire("automation_reloaded")
         await hass.async_block_till_done()
 
     return setup
