@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 async def test_half_millimeter_of_rain_makes_the_lawn_wet(
     hass: HomeAssistant, setup_conditions
 ) -> None:
+    hass.states.async_set("sensor.air_temperature", "20")
     hass.states.async_set("sensor.rain_last_hour", "0.5")
     hass.states.async_set("sensor.humidity", "50")
     await setup_conditions({
@@ -22,8 +23,8 @@ async def test_half_millimeter_of_rain_makes_the_lawn_wet(
 @pytest.mark.parametrize(
     ("rain", "humidity", "expected"),
     [
-        ("0.49", "91.9", "off"),
-        ("0", "92", "on"),
+        ("0.49", "90", "off"),
+        ("0", "95", "on"),
         ("unavailable", "50", "unavailable"),
     ],
 )
@@ -34,6 +35,7 @@ async def test_wetting_boundaries_and_unavailable_readings(
     humidity: str,
     expected: str,
 ) -> None:
+    hass.states.async_set("sensor.air_temperature", "20")
     hass.states.async_set("sensor.rain_last_hour", rain)
     hass.states.async_set("sensor.humidity", humidity)
     await setup_conditions({
@@ -60,6 +62,7 @@ async def test_optional_wetting_sources(
     entity: str,
     reading: str,
 ) -> None:
+    hass.states.async_set("sensor.air_temperature", "20")
     hass.states.async_set("sensor.rain_last_hour", "0")
     hass.states.async_set("sensor.humidity", "50")
     hass.states.async_set(entity, reading)
@@ -77,6 +80,7 @@ async def test_drying_requires_three_clear_hours_after_the_last_wetting(
     hass: HomeAssistant, setup_conditions, freezer
 ) -> None:
     freezer.move_to(datetime(2026, 11, 6, 12, tzinfo=UTC))
+    hass.states.async_set("sensor.air_temperature", "20")
     hass.states.async_set("sensor.rain_last_hour", "0.5")
     hass.states.async_set("sensor.humidity", "50")
     await setup_conditions({
@@ -90,7 +94,7 @@ async def test_drying_requires_three_clear_hours_after_the_last_wetting(
     freezer.tick(timedelta(hours=2))
     async_fire_time_changed(hass, datetime.now(UTC))
     await hass.async_block_till_done()
-    hass.states.async_set("sensor.humidity", "92")
+    hass.states.async_set("sensor.humidity", "96")
     await hass.async_block_till_done()
     hass.states.async_set("sensor.humidity", "50")
     await hass.async_block_till_done()
@@ -103,6 +107,57 @@ async def test_drying_requires_three_clear_hours_after_the_last_wetting(
     freezer.tick(timedelta(minutes=1))
     async_fire_time_changed(hass, datetime.now(UTC))
     await hass.async_block_till_done()
+    assert hass.states.get("binary_sensor.lawn_wet").state == "off"
+
+
+@pytest.mark.parametrize(
+    ("ground", "humidity", "expected"),
+    [
+        (None, "95", "on"),
+        ("25", "95", "off"),
+        ("18", "95", "on"),
+        ("unavailable", "95", "unavailable"),
+    ],
+)
+async def test_dew_point_uses_grass_temperature_when_configured(
+    hass: HomeAssistant,
+    setup_conditions,
+    ground: str | None,
+    humidity: str,
+    expected: str,
+) -> None:
+    hass.states.async_set("sensor.air_temperature", "20")
+    hass.states.async_set("sensor.rain_last_hour", "0")
+    hass.states.async_set("sensor.humidity", humidity)
+    inputs = {"drying_hours": 0}
+    if ground is not None:
+        hass.states.async_set("sensor.ground_temperature", ground)
+        inputs["ground_temperature_sensor"] = "sensor.ground_temperature"
+
+    await setup_conditions(inputs)
+
+    assert hass.states.get("binary_sensor.lawn_wet").state == expected
+
+
+async def test_dew_point_ignores_zero_humidity(
+    hass: HomeAssistant, setup_conditions
+) -> None:
+    hass.states.async_set("sensor.air_temperature", "20")
+    hass.states.async_set("sensor.rain_last_hour", "0")
+    hass.states.async_set("sensor.humidity", "0")
+    await setup_conditions({"drying_hours": 0})
+
+    assert hass.states.get("binary_sensor.lawn_wet").state == "off"
+
+
+async def test_legacy_dew_humidity_input_is_ignored(
+    hass: HomeAssistant, setup_conditions
+) -> None:
+    hass.states.async_set("sensor.air_temperature", "20")
+    hass.states.async_set("sensor.rain_last_hour", "0")
+    hass.states.async_set("sensor.humidity", "95")
+    await setup_conditions({"dew_humidity": 50, "dew_point_margin": 0, "drying_hours": 0})
+
     assert hass.states.get("binary_sensor.lawn_wet").state == "off"
 
 
