@@ -25,7 +25,7 @@ from homeassistant.core import HomeAssistant
             "65.0",
         ),
         (
-            {"drought_deficit": 40, "bucket_sensor": "sensor.bucket", "bucket_attribute": ""},
+            {"drought_deficit": 40, "bucket_sensor": "sensor.bucket"},
             {"sensor.bucket": "-10"},
             "75.0",
         ),

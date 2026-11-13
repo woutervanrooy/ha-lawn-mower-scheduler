@@ -176,8 +176,7 @@ When both moisture sensors are selected, the lower factor wins.
 | Air temperature | Required | Current temperature; forecast sensors are not needed |
 | 24-hour irradiation | Empty | Without a valid reading, light factor is 1 |
 | Soil moisture percent | Empty | Optional calibrated moisture reading |
-| Bucket sensor | Empty | Optional negative water deficit or Smart Irrigation sensor |
-| Bucket attribute | `bucket` | Clear this input to read the sensor state instead |
+| Bucket sensor | Empty | Optional water balance in mm (negative = deficit, positive = surplus), read from the sensor state |
 | Optimum temperature | 20 Celsius | Location of the temperature peak |
 | Curve width | 5.5 Celsius | Higher values broaden the growth curve |
 | Light saturation | 4 kWh/m2 | More irradiation is needed when raised |

@@ -63,18 +63,14 @@ blueprint:
         bucket_sensor:
           name: Soil water bucket (optional)
           description: >-
-            Bucket in mm: negative values indicate a deficit; zero or positive
-            values indicate sufficient water. Supports Smart Irrigation.
+            Bucket in mm: negative values indicate a deficit, positive values
+            indicate a surplus, and zero means balanced. Select a sensor whose state is
+            the bucket value. If your integration exposes it only as an
+            attribute, create a template sensor for that attribute first.
           default: []
           selector:
             entity:
               domain: sensor
-        bucket_attribute:
-          name: Bucket attribute
-          description: Default bucket for Smart Irrigation. Clear to read the sensor state.
-          default: bucket
-          selector:
-            text:
         irrigation_entity:
           name: Irrigation activity (optional)
           description: An on/off activity entity or an open/closed irrigation valve.
@@ -339,7 +335,6 @@ variables:
   irradiation_sensor: !input irradiation_sensor
   soil_moisture_sensor: !input soil_moisture_sensor
   bucket_sensor: !input bucket_sensor
-  bucket_attribute: !input bucket_attribute
   irrigation_entity: !input irrigation_entity
   mower_rain_sensor: !input mower_rain_sensor
   optimum_temperature: !input optimum_temperature
@@ -388,11 +383,7 @@ variables:
       {%- else -%}
         {%- set soil_factor = 1 -%}
       {%- endif -%}
-      {%- if bucket_sensor -%}
-        {%- set bucket = state_attr(bucket_sensor, bucket_attribute) if bucket_attribute else states(bucket_sensor) -%}
-      {%- else -%}
-        {%- set bucket = none -%}
-      {%- endif -%}
+      {%- set bucket = states(bucket_sensor) if bucket_sensor else none -%}
       {%- set bucket_factor = [[1 + ([bucket | float, 0] | min) / drought_deficit, minimum_moisture_factor] | max, 1] | min if is_number(bucket) else 1 -%}
       {{ (temperature_factor * light_factor * ([soil_factor, bucket_factor] | min) * 100) | round(1) }}
     {%- else -%}

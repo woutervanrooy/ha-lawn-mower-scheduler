@@ -12,8 +12,7 @@ automation:
         # ground_temperature_sensor: sensor.ground_temperature
         # irradiation_sensor: sensor.irradiation_24h
         # soil_moisture_sensor: sensor.soil_moisture
-        # bucket_sensor: sensor.soil_water_bucket
-        # bucket_attribute: ""  # Read the state instead of a bucket attribute.
+        # bucket_sensor: sensor.soil_water_bucket  # Bucket value in the sensor state.
         # irrigation_entity: switch.lawn_irrigation
         # mower_rain_sensor: binary_sensor.mower_rain
         # dry_soil_percent: 15
