@@ -70,13 +70,12 @@ async def test_individual_optional_growth_inputs(
     await setup_conditions({
             "temperature_sensor": "sensor.air_temperature",
             input_name: "sensor.optional_reading",
-            "bucket_attribute": "",
         },
     )
     assert hass.states.get("sensor.lawn_growth_index").state == expected
 
 
-async def test_growth_updates_when_the_bucket_attribute_changes(
+async def test_growth_uses_bucket_state_and_updates_when_it_changes(
     hass: HomeAssistant, setup_conditions
 ) -> None:
     hass.states.async_set("sensor.air_temperature", "20")
@@ -86,7 +85,13 @@ async def test_growth_updates_when_the_bucket_attribute_changes(
             "bucket_sensor": "sensor.bucket",
         },
     )
-    hass.states.async_set("sensor.bucket", "0", {"bucket": -10})
+    assert hass.states.get("sensor.lawn_growth_index").state == "100.0"
+
+    hass.states.async_set("sensor.bucket", "-10", {"bucket": 0})
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.lawn_growth_index").state == "50.0"
+
+    hass.states.async_set("sensor.bucket", "-10", {"bucket": -20})
     await hass.async_block_till_done()
     assert hass.states.get("sensor.lawn_growth_index").state == "50.0"
 
@@ -117,7 +122,7 @@ async def test_drier_of_soil_moisture_and_bucket_limits_growth(
 ) -> None:
     hass.states.async_set("sensor.air_temperature", "20")
     hass.states.async_set("sensor.soil_moisture", "22.5")
-    hass.states.async_set("sensor.irrigation_bucket", "0", {"bucket": -10})
+    hass.states.async_set("sensor.irrigation_bucket", "-10")
 
     await setup_conditions({
             "temperature_sensor": "sensor.air_temperature",
