@@ -1,5 +1,7 @@
 # Lawn mower scheduler
 
+[![Tests](https://github.com/woutervanrooy/ha-lawn-mower-scheduler/actions/workflows/tests.yml/badge.svg)](https://github.com/woutervanrooy/ha-lawn-mower-scheduler/actions/workflows/tests.yml)
+
 A portable collection of Home Assistant blueprints for one lawn mower.
 The collection uses built-in Home Assistant components and needs no custom
 dashboard plugins. Your mower integration must provide a compatible
@@ -402,6 +404,11 @@ python3.14 -m venv .venv
 .venv/bin/python -m pip install -r requirements-dev.txt
 .venv/bin/python -m pytest
 ```
+
+The same suite runs automatically on GitHub Actions for every push to `main`
+and every pull request (see the badge at the top). Each run shows a pass/fail
+summary on its run page and uploads `test-results.xml` as an artifact. You can
+also start a run manually from the **Actions** tab (**Tests** → **Run workflow**).
 
 Physical mower operation and the freshness of a real mower's area/event sensors
 still require validation on the user's Home Assistant installation.
