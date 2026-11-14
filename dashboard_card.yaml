@@ -10,8 +10,16 @@ entities:
     name: Mowing interval
   - entity: binary_sensor.lawn_wet
     name: Wet grass
+  - type: attribute
+    entity: binary_sensor.lawn_wet
+    attribute: wetting_causes
+    name: Wetting causes
   - entity: binary_sensor.lawn_frozen
     name: Frozen grass
+  - type: attribute
+    entity: binary_sensor.lawn_frozen
+    attribute: freezing_causes
+    name: Freezing causes
   - entity: input_datetime.lawn_mower_last_started
     name: Last started
   - entity: input_datetime.lawn_mower_last_completed

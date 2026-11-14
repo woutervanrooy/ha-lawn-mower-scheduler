@@ -20,6 +20,49 @@ async def test_half_millimeter_of_rain_makes_the_lawn_wet(
     assert hass.states.get("binary_sensor.lawn_wet").state == "on"
 
 
+async def test_wetting_causes_list_every_active_source(
+    hass: HomeAssistant, setup_conditions
+) -> None:
+    hass.states.async_set("sensor.air_temperature", "20")
+    hass.states.async_set("sensor.rain_last_hour", "1")
+    hass.states.async_set("sensor.humidity", "95")
+    hass.states.async_set("switch.irrigation", "off")
+    await setup_conditions({
+            "rain_sensor": "sensor.rain_last_hour",
+            "humidity_sensor": "sensor.humidity",
+            "irrigation_entity": "switch.irrigation",
+        },
+    )
+    wet = hass.states.get("binary_sensor.lawn_wet")
+    assert wet.attributes["wetting_causes"] == ["rain", "dew"]
+
+    hass.states.async_set("sensor.rain_last_hour", "0")
+    hass.states.async_set("sensor.humidity", "50")
+    await hass.async_block_till_done()
+    wet = hass.states.get("binary_sensor.lawn_wet")
+    assert wet.state == "on"
+    assert wet.attributes["wetting_causes"] == []
+
+
+async def test_freezing_causes_name_the_cold_source(
+    hass: HomeAssistant, setup_conditions
+) -> None:
+    hass.states.async_set("sensor.air_temperature", "10")
+    hass.states.async_set("sensor.ground_temperature", "1")
+    await setup_conditions({
+            "temperature_sensor": "sensor.air_temperature",
+            "ground_temperature_sensor": "sensor.ground_temperature",
+        },
+    )
+    frozen = hass.states.get("binary_sensor.lawn_frozen")
+    assert frozen.attributes["freezing_causes"] == ["ground_frost"]
+
+    hass.states.async_set("sensor.ground_temperature", "2")
+    await hass.async_block_till_done()
+    frozen = hass.states.get("binary_sensor.lawn_frozen")
+    assert frozen.attributes["freezing_causes"] == ["not_thawed"]
+
+
 @pytest.mark.parametrize(
     ("rain", "humidity", "expected"),
     [
