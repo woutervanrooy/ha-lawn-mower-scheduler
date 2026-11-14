@@ -268,6 +268,12 @@ blocks until a thaw is confirmed. Thaw thresholds must exceed frost thresholds;
 invalid thresholds keep the guard on, set its `configuration_error` attribute
 and create a persistent notification.
 
+The active causes are listed in the `wetting_causes` (`rain`, `dew`,
+`irrigation`, `mower_rain_sensor`) and `freezing_causes` (`air_frost`,
+`ground_frost`, `not_thawed`, `configuration_error`) attributes. `not_thawed`
+means readings are between the frost and thaw thresholds while the guard was
+already on. The lists are empty while only a drying or thaw delay is pending.
+
 Drying and thaw deadlines are stored in the `dry_at` and `thaw_at` attributes
 and survive restarts and automation reloads. Unrelated sensor updates do not
 extend a pending delay. Without a previous clear state, such as on a fresh
