@@ -411,13 +411,25 @@ variables:
        and (not ground_temperature_sensor or is_number(states(ground_temperature_sensor)))
        and (not irrigation_entity or states(irrigation_entity) in ['on', 'off', 'open', 'closed', 'opening', 'closing'])
        and (not mower_rain_sensor or states(mower_rain_sensor) in ['on', 'off']) else false }}
-  wetting: >-
-    {{ true if wet_available and (
-         states(rain_sensor) | float(0) >= rain_threshold
-         or (dew_point is not none and is_number(dew_temperature)
-             and dew_temperature | float - dew_point | float <= dew_point_margin)
-         or (irrigation_entity and states(irrigation_entity) in ['on', 'open', 'opening', 'closing'])
-         or (mower_rain_sensor and is_state(mower_rain_sensor, 'on'))) else false }}
+  wetting_causes: >-
+    {%- set causes = namespace(list=[]) -%}
+    {%- if wet_available -%}
+      {%- if states(rain_sensor) | float(0) >= rain_threshold -%}
+        {%- set causes.list = causes.list + ['rain'] -%}
+      {%- endif -%}
+      {%- if dew_point is not none and is_number(dew_temperature)
+             and dew_temperature | float - dew_point | float <= dew_point_margin -%}
+        {%- set causes.list = causes.list + ['dew'] -%}
+      {%- endif -%}
+      {%- if irrigation_entity and states(irrigation_entity) in ['on', 'open', 'opening', 'closing'] -%}
+        {%- set causes.list = causes.list + ['irrigation'] -%}
+      {%- endif -%}
+      {%- if mower_rain_sensor and is_state(mower_rain_sensor, 'on') -%}
+        {%- set causes.list = causes.list + ['mower_rain_sensor'] -%}
+      {%- endif -%}
+    {%- endif -%}
+    {{ causes.list }}
+  wetting: "{{ wetting_causes | length > 0 }}"
   dry_at: >-
     {%- set previous = states(wet_entity) -%}
     {%- set remembered = state_attr(wet_entity, 'wetting') -%}
@@ -436,6 +448,7 @@ variables:
     {%- set expected = ('on' if wet else 'off') if wet_available else 'unavailable' -%}
     {{ states(wet_entity) != expected
        or (wet_available and (state_attr(wet_entity, 'wetting') != wetting
+                              or state_attr(wet_entity, 'wetting_causes') != wetting_causes
                               or state_attr(wet_entity, 'dry_at') != dry_at)) }}
 
   # Frozen lawn: frost/thaw hysteresis, then a thaw delay.
@@ -448,13 +461,29 @@ variables:
     {%- elif ground_temperature_sensor and ground_thaw_temperature <= ground_frost_temperature -%}
       Ground thaw temperature must exceed ground frost temperature.
     {%- endif -%}
-  freezing: >-
-    {%- set air = states(temperature_sensor) | float(0) -%}
-    {%- set ground = states(ground_temperature_sensor) | float(0) if ground_temperature_sensor else none -%}
-    {%- set cold = air <= air_frost_temperature or (ground is not none and ground <= ground_frost_temperature) -%}
-    {%- set thawed = air >= air_thaw_temperature and (ground is none or ground >= ground_thaw_temperature) -%}
-    {{ true if frozen_available and (frozen_error or cold
-         or (not thawed and states(frozen_entity) != 'off')) else false }}
+  freezing_causes: >-
+    {%- set causes = namespace(list=[]) -%}
+    {%- if frozen_available -%}
+      {%- set air = states(temperature_sensor) | float(0) -%}
+      {%- set ground = states(ground_temperature_sensor) | float(0) if ground_temperature_sensor else none -%}
+      {%- set air_cold = air <= air_frost_temperature -%}
+      {%- set ground_cold = ground is not none and ground <= ground_frost_temperature -%}
+      {%- set thawed = air >= air_thaw_temperature and (ground is none or ground >= ground_thaw_temperature) -%}
+      {%- if frozen_error -%}
+        {%- set causes.list = causes.list + ['configuration_error'] -%}
+      {%- endif -%}
+      {%- if air_cold -%}
+        {%- set causes.list = causes.list + ['air_frost'] -%}
+      {%- endif -%}
+      {%- if ground_cold -%}
+        {%- set causes.list = causes.list + ['ground_frost'] -%}
+      {%- endif -%}
+      {%- if not air_cold and not ground_cold and not thawed and states(frozen_entity) != 'off' -%}
+        {%- set causes.list = causes.list + ['not_thawed'] -%}
+      {%- endif -%}
+    {%- endif -%}
+    {{ causes.list }}
+  freezing: "{{ freezing_causes | length > 0 }}"
   thaw_at: >-
     {%- set previous = states(frozen_entity) -%}
     {%- set remembered = state_attr(frozen_entity, 'freezing') -%}
@@ -473,6 +502,7 @@ variables:
     {%- set expected = ('on' if frozen else 'off') if frozen_available else 'unavailable' -%}
     {{ states(frozen_entity) != expected
        or (frozen_available and (state_attr(frozen_entity, 'freezing') != freezing
+                                 or state_attr(frozen_entity, 'freezing_causes') != freezing_causes
                                  or state_attr(frozen_entity, 'thaw_at') != thaw_at
                                  or (state_attr(frozen_entity, 'configuration_error') or '') != frozen_error)) }}
 
@@ -492,6 +522,7 @@ action:
           available: "{{ wet_available }}"
           wet: "{{ wet }}"
           wetting: "{{ wetting }}"
+          wetting_causes: "{{ wetting_causes }}"
           dry_at: "{{ dry_at }}"
   - if: "{{ frozen_changed }}"
     then:
@@ -500,6 +531,7 @@ action:
           available: "{{ frozen_available }}"
           frozen: "{{ frozen }}"
           freezing: "{{ freezing }}"
+          freezing_causes: "{{ freezing_causes }}"
           thaw_at: "{{ thaw_at }}"
           configuration_error: "{{ frozen_error }}"
   # Report invalid settings when the affected entity changes. Notifications
